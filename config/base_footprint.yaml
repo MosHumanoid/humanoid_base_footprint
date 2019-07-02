@@ -1,1 +1,2 @@
 imu_topic: "/imu/data"
+use_odometry: True #when this parameter is true, the orientation of the odometry tf is used instead of the foot

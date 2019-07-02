@@ -41,7 +41,8 @@ BaseFootprintBroadcaster::BaseFootprintBroadcaster() : tfBuffer(ros::Duration(10
     ros::NodeHandle n("~");
     got_support_foot = false;
     ros::Subscriber support_foot_subscriber = n.subscribe("/walk_support_state", 1, &BaseFootprintBroadcaster::supportFootCallback, this);
-
+    bool use_odometry;
+    n.param<bool>("use_odometry", use_odometry, false);
     tf = geometry_msgs::TransformStamped();
     
     static tf2_ros::TransformBroadcaster br;
@@ -103,14 +104,17 @@ BaseFootprintBroadcaster::BaseFootprintBroadcaster() : tfBuffer(ros::Duration(10
             base_footprint.pose.position.y = non_support_foot_in_support_foot_frame.transform.translation.y/2;
 
 
-            // get yaw from base link
-            double yaw;
-            yaw = tf2::getYaw(support_to_base_link.transform.rotation);
-            
-            // pitch and roll from support foot, yaw from base link
-            tf2::Quaternion rotation;
-            rotation.setRPY(0.0,0.0,yaw);
-            base_footprint.pose.orientation = tf2::toMsg(rotation);
+            if (!use_odometry)
+            {
+                // get yaw from base link
+                double yaw;
+                yaw = tf2::getYaw(support_to_base_link.transform.rotation);
+
+                // pitch and roll from support foot, yaw from base link
+                tf2::Quaternion rotation;
+                rotation.setRPY(0.0,0.0,yaw);
+                base_footprint.pose.orientation = tf2::toMsg(rotation);
+            }
 
             // transform the position and orientation of the base footprint into the base_link frame
             tf2::doTransform(base_footprint, base_footprint_in_base_link, support_to_base_link);
@@ -122,7 +126,17 @@ BaseFootprintBroadcaster::BaseFootprintBroadcaster() : tfBuffer(ros::Duration(10
             tf.transform.translation.x = base_footprint_in_base_link.pose.position.x;
             tf.transform.translation.y = base_footprint_in_base_link.pose.position.y;
             tf.transform.translation.z = base_footprint_in_base_link.pose.position.z;
-            tf.transform.rotation = base_footprint_in_base_link.pose.orientation;
+            if (use_odometry)
+            {
+                tf.transform.rotation = tfBuffer.lookupTransform("base_link",
+                                                                 "odom",
+                                                                 tf.header.stamp,
+                                                                 ros::Duration(0.1)).transform.rotation;
+            }
+            else
+            {
+                tf.transform.rotation = base_footprint_in_base_link.pose.orientation;
+            }
             br.sendTransform(tf);
 
         } catch(...){
